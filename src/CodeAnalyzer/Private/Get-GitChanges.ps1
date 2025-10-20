@@ -4,25 +4,21 @@ function Get-GitChanges {
         [Parameter(Mandatory)]
         [string]$BaseBranch, 
         
+        [Parameter(Mandatory)]
+        [string]$TargetBranch,
+        
         [switch]$IncludeUncommitted,
         
         [Parameter(Mandatory)]
         [int]$MaxInputChars
     )
 
-    Write-Host "`n🔍 ПОЛУЧЕНИЕ ИЗМЕНЕНИЙ ИЗ GIT" -ForegroundColor Yellow
-
     function Write-Info([string]$msg){ Write-Host $msg -ForegroundColor Gray }
     function Write-Success([string]$msg){ Write-Host $msg -ForegroundColor Green }
     function Write-Warn([string]$msg){ Write-Host $msg -ForegroundColor Yellow }
     function Write-Err([string]$msg){ Write-Host $msg -ForegroundColor Red }
     
-    function Truncate-String {
-        param([string]$Text, [int]$MaxLen)
-        if ([string]::IsNullOrEmpty($Text)) { return $Text }
-        if ($Text.Length -le $MaxLen) { return $Text }
-        return ($Text.Substring(0, $MaxLen) + "`n[TRUNCATED: original length=$($Text.Length)]")
-    }
+    Write-Host "`n🔍 ПОЛУЧЕНИЕ ИЗМЕНЕНИЙ ИЗ GIT" -ForegroundColor Yellow
 
     $gitRoot = & git rev-parse --show-toplevel 2>$null
     if (-not $gitRoot) {
@@ -43,10 +39,22 @@ function Get-GitChanges {
         }
     }
 
-    # Изменённые файлы и diff (без внешних diff-инструментов)
-    $changedFiles = (& git diff --name-only --no-ext-diff "$BaseBranch...HEAD" 2>$null)
+    # Проверим целевую ветку
+    $hasTarget = (& git rev-parse --verify "$TargetBranch" 2>$null)
+    if (-not $hasTarget) {
+        Write-Warn "   Целевая ветка '$TargetBranch' не найдена локально. Пробую fetch..."
+        & git fetch origin $TargetBranch 2>$null | Out-Null
+        $hasTarget = (& git rev-parse --verify "$TargetBranch" 2>$null)
+        if (-not $hasTarget) {
+            Write-Err "   ❌ Ветка '$TargetBranch' не найдена ни локально, ни после fetch"
+            return $null
+        }
+    }
+
+    # ИЗМЕНЯЕМ КОМАНДЫ GIT DIFF:
+    $changedFiles = (& git diff --name-only --no-ext-diff "$BaseBranch...$TargetBranch" 2>$null)
     $changedFiles = @($changedFiles) # нормализуем в массив
-    $diffOutput   = (& git diff --no-ext-diff "$BaseBranch...HEAD" 2>$null)
+    $diffOutput   = (& git diff --no-ext-diff "$BaseBranch...$TargetBranch" 2>$null)
 
     if ($IncludeUncommitted) {
         $stagedFiles   = (& git diff --cached --name-only --no-ext-diff 2>$null)
@@ -60,16 +68,20 @@ function Get-GitChanges {
     }
 
     if ([string]::IsNullOrWhiteSpace($diffOutput)) {
-        Write-Warn "   Нет изменений между $BaseBranch и текущей веткой"
+        Write-Warn "   Нет изменений между $BaseBranch и $TargetBranch"
         return $null
     }
 
     Write-Success ("   ✅ Изменений: " + $changedFiles.Count + " файлов")
     Write-Info    ("   Размер diff: " + $diffOutput.Length + " символов")
+    Write-Info    ("   Сравнение: $BaseBranch...$TargetBranch")  # ← ДОБАВЛЯЕМ
     foreach ($file in $changedFiles) { Write-Info ("      📄 " + $file) }
 
-    # Вернём и «урезанную» версию по лимиту, и полную длину для справки
-    $truncated = Truncate-String -Text $diffOutput -MaxLen $MaxInputChars
+    if ($diffOutput.Length -gt $MaxInputChars) {
+        $truncated = $diffOutput.Substring(0, $MaxInputChars) + "`n[TRUNCATED: original length=$($diffOutput.Length)]"
+    } else {
+        $truncated = $diffOutput
+    }
 
     return @{
         DiffContent   = $truncated

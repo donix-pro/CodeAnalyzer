@@ -27,7 +27,20 @@ param(
     [string]$AskFormat = 'cheatsheet',
 
     [Parameter(Mandatory=$false)]
-    [int]$AskMaxTokens = 1500
+    [int]$AskMaxTokens = 1500,
+
+    [Parameter(Mandatory=$false)]
+    [string]$ProjectPassportPath = '',
+
+    [Parameter(Mandatory=$false)]  
+    [string]$ArchitectureRulesPath = '',
+
+    [Parameter(Mandatory=$false)]
+    [string]$TargetBranch = 'HEAD',
+    
+    [Parameter(Mandatory=$false)]
+    [ValidateSet('Auto', 'Clean', 'DDD', 'MVC', 'Layered', 'Microservices')]
+    [string]$Architecture = 'Auto'
 )
 
 Set-StrictMode -Version Latest
@@ -113,7 +126,7 @@ try {
 
     if ($Mode -eq "diff") {
         Write-Host "`n1️⃣  ПОЛУЧЕНИЕ ИЗМЕНЕНИЙ ИЗ GIT" -ForegroundColor Yellow
-        $gitChanges = Get-GitChanges -BaseBranch $CompareBranch -IncludeUncommitted:$IncludeUncommitted -MaxInputChars $MaxInputChars
+        $gitChanges = Get-GitChanges -BaseBranch $CompareBranch -TargetBranch $TargetBranch -IncludeUncommitted:$IncludeUncommitted -MaxInputChars $MaxInputChars
         
         if (-not $gitChanges) { 
             Write-Host "❌ Нет изменений для анализа" -ForegroundColor Red
@@ -121,7 +134,7 @@ try {
         }
 
         Write-Host "`n2️⃣  ЗАГРУЗКА КОНТЕКСТА ПРОЕКТА" -ForegroundColor Yellow
-        $projectContext = Get-ProjectContext
+        $projectContext = Get-ProjectContext -ProjectPassportPath $ProjectPassportPath -ArchitectureRulesPath $ArchitectureRulesPath
 
         if ($gitChanges.Truncated) {
             Write-Host "⚠️  Diff усечён до $MaxInputChars символов" -ForegroundColor Yellow
@@ -138,14 +151,13 @@ try {
 
     } elseif ($Mode -eq "architecture") {
         Write-Host "`n🏗️  АРХИТЕКТУРНЫЙ АУДИТ" -ForegroundColor Yellow
-        $result = Invoke-ArchitectureAudit -ProjectPath "." -Config $config
+        $result = Invoke-ArchitectureAudit -ProjectPath "." -Config $config -TargetArchitecture $Architecture
 
         Write-Host "`n💾 СОХРАНЕНИЕ ОТЧЁТА" -ForegroundColor Yellow
-        $reportFile = Save-AnalysisResults -AnalysisResult $result -CompareBranch "" -OutputPath $OutputPath -Mode "architecture" -ProjectPathForReport (Get-Location).Path
+        $reportFile = Save-AnalysisResults -AnalysisResult $result -CompareBranch "N/A" -OutputPath $OutputPath -Mode "architecture" -ProjectPathForReport (Get-Location).Path
 
         Write-Host "✅ Архитектурный аудит завершён" -ForegroundColor Green
         Write-Host "📄 Отчёт: $reportFile" -ForegroundColor Cyan
-
     }
     elseif ($Mode -eq "ask") {
         if ([string]::IsNullOrWhiteSpace($Query)) {

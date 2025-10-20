@@ -14,11 +14,6 @@ function Invoke-DiffAnalysis {
         [double]$Temperature = 0.1
     )
     
-    if ($ProjectPath -ne '.' -and (Test-Path $ProjectPath)) {
-    Set-Location $ProjectPath
-    Write-Host "📁 Рабочая директория изменена на: $ProjectPath" -ForegroundColor Cyan
-    }
-
     function Write-Info([string]$msg) { Write-Host $msg -ForegroundColor Gray }
     function Write-Success([string]$msg) { Write-Host $msg -ForegroundColor Green }
     function Write-Err([string]$msg) { Write-Host $msg -ForegroundColor Red }
@@ -53,11 +48,10 @@ $($GitChanges.DiffContent)
 
 ЗАДАЧА АНАЛИЗА:
 1. Проанализируй ВСЕ изменения ЦЕЛИКОМ
-2. Найди архитектурные проблемы между измененными файлами
-3. Проверь согласованность изменений
-4. Выяви потенциальные баги и регрессии
-5. Проверь соответствие архитектурным стандартам
-6. Дай общую оценку качества изменений
+2. Если тебе не хватает контекста о бизнес-правилах или архитектуре - ПОПРОСИ уточнить
+3. Найди архитектурные проблемы между измененными файлами
+4. Проверь согласованность изменений
+5. Выяви потенциальные баги и регрессии
 
 Верни ответ в формате:
 📊 ОБЩАЯ ОЦЕНКА: [✅ Хорошо / ⚠️ Есть проблемы / ❌ Критично]
