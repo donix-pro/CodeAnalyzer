@@ -1,6 +1,7 @@
 class AnalyzeDiffUseCase {
     [IAIProvider]$AI
     [ILogger]$Logger
+    [string]$TemplatePath = "$PSScriptRoot\..\..\Application\PromptTemplates\DiffAnalysisPrompt.txt"
 
     AnalyzeDiffUseCase([IAIProvider]$ai, [ILogger]$log) {
         $this.AI = $ai
@@ -8,61 +9,51 @@ class AnalyzeDiffUseCase {
     }
 
     [string] Execute([hashtable]$GitChanges, [hashtable]$ProjectContext) {
-        $this.Logger.Info("Начинаем анализ изменений...")
 
-        # === Статистика ===
-        $this.Logger.Info("Файлов изменено: $($GitChanges.ChangedFiles.Count)")
-        $this.Logger.Info("Размер diff: $($GitChanges.DiffContent.Length) символов")
         if ($GitChanges.Truncated) {
-            $this.Logger.Warn("Diff усечён (лимит символов)")
+            $this.Logger.Warn("Diff усечён")
         }
 
-        # === Формируем контекст ===
-        $projectInfo = if ($ProjectContext.ProjectPassport) {
-            "КОНТЕКСТ ПРОЕКТА:`n$($ProjectContext.ProjectPassport)`n"
-        } else { "" }
+        if (-not $ProjectContext is [hashtable]){
+            throw "ProjectContext должен быть hashtable"
+        }
 
-        $architectureInfo = if ($ProjectContext.ArchitectureRules) {
-            "АРХИТЕКТУРНЫЕ СТАНДАРТЫ:`n$($ProjectContext.ArchitectureRules)`n"
-        } else { "" }
+        $this.Logger.Info("Начинаем анализ diff...")
 
-        # === Формируем промпт ===
-        $prompt = @"
-АНАЛИЗ GIT ИЗМЕНЕНИЙ
-$projectInfo
-$architectureInfo
-СПИСОК ИЗМЕНЕННЫХ ФАЙЛОВ:
-$($GitChanges.ChangedFiles -join "`n")
-GIT DIFF (КОНКРЕТНЫЕ ИЗМЕНЕНИЯ):
-$($GitChanges.DiffContent)
-ЗАДАЧА АНАЛИЗА:
-1. Проанализируй ВСЕ изменения ЦЕЛИКОМ
-2. Если тебе не хватает контекста о бизнес-правилах или архитектуре - ПОПРОСИ уточнить
-3. Найди архитектурные проблемы между измененными файлами
-4. Проверь согласованность изменений
-5. Выяви потенциальные баги и регрессии
-Верни ответ в формате:
-📊 ОБЩАЯ ОЦЕНКА: [✅ Хорошо / ⚠️ Есть проблемы / ❌ Критично]
-🔍 ГЛАВНЫЕ ПРОБЛЕМЫ:
-• Проблема 1: описание
-• Проблема 2: описание
-💡 РЕКОМЕНДАЦИИ:
-• Рекомендация 1: что исправить
-• Рекомендация 2: что проверить
-🏗️ АРХИТЕКТУРНЫЕ ЗАМЕЧАНИЯ:
-• Замечание 1
-• Замечание 2
-"@
+        # === СТАТИСТИКА ===
+        $this.Logger.Info("Файлов изменено: $($GitChanges.ChangedFiles.Count)")
+        $this.Logger.Info("Размер diff: $($GitChanges.DiffContent.Length) символов")
 
-        # === Отправляем в AI ===
+        # === ЧТЕНИЕ ШАБЛОНА ===
+        if (-not (Test-Path $this.TemplatePath)) {
+            throw "Шаблон не найден: $($this.TemplatePath)"
+        }
+        $template = Get-Content $this.TemplatePath -Raw
+
+        # === ПОДСТАНОВКА ===
+        $projectInfo = $ProjectContext.ProjectPassport ?? ""
+        $architectureInfo = $ProjectContext.ArchitectureRules ?? ""
+
+        $prompt = $template `
+            -replace '\$projectInfo', $projectInfo `
+            -replace '\$architectureInfo', $architectureInfo `
+            -replace '\$GitChanges\.ChangedFiles', ($GitChanges.ChangedFiles -join "`n") `
+            -replace '\$GitChanges\.DiffContent', $GitChanges.DiffContent
+
+        # === ПРОВЕРКА ===
+        if ($prompt -match '\$') {
+            $this.Logger.Warn("Не все переменные заменены")
+        }
+
+        # === ОТПРАВКА В AI ===
         try {
             $response = $this.AI.Analyze($prompt)
-            $this.Logger.Info("Анализ получен от AI")
+            $this.Logger.Info("AI ответил")
             return $response
         }
         catch {
-            $this.Logger.Error("Ошибка при запросе к AI: $($_.Exception.Message)")
-            throw "Не удалось получить анализ: $($_.Exception.Message)"
+            $this.Logger.Error("AI ошибка: $($_.Exception.Message)")
+            throw
         }
     }
 }

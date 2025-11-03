@@ -10,7 +10,7 @@ class BedrockAdapter : IAIProvider {
         $this.Config = $cfg
     }
 
-    [string] Analyze([string]$prompt) {
+    [string] Analyze([string]$prompt, [int]$maxTokens = 2000) {
         # Создаём ContentBlock
         $contentBlock = New-Object Amazon.BedrockRuntime.Model.ContentBlock
         $contentBlock.Text = $prompt
@@ -24,9 +24,28 @@ class BedrockAdapter : IAIProvider {
                 -ModelId $this.Config.modelId `
                 -Region $this.Config.awsRegion `
                 -Message $message `
-                -InferenceConfig_MaxTokens 2000
+                -InferenceConfig_MaxTokens $maxTokens
+                
+            if (-not $response) {
+                throw "AWS Bedrock: ответ null"
+            }
+            if (-not $response.output) {
+                throw "AWS Bedrock: нет поля output"
+            }
+            if (-not $response.output.message) {
+                throw "AWS Bedrock: нет поля output.message"
+            }
+            if ($response.output.message.content.Count -eq 0) {
+                throw "AWS Bedrock: content пустой"
+            }
 
-            return $response.output.message.content[0].text
+            $text = $response.output.message.content[0].text
+            if ([string]::IsNullOrWhiteSpace($text)) {
+                throw "AWS Bedrock: текст ответа пустой"
+            }
+
+            return $text
+
         }
         catch {
             throw "AWS Bedrock error: $($_.Exception.Message)"

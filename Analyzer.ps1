@@ -13,6 +13,11 @@ param(
 
     [string]$OutputPath = 'analysis-results',
 
+    [string]$ProjectPath = '.',
+    [ValidateSet('Auto', 'Clean', 'DDD', 'MVC', 'Layered', 'Microservices')]
+    [string]$Architecture = 'Auto',
+
+    [string]$Query = '',
     [switch]$WhatIf
 )
 
@@ -33,7 +38,11 @@ Import-Module AWS.Tools.BedrockRuntime -ErrorAction Stop
 . "$PSScriptRoot\src\CodeAnalyzer\Application\Services\DIContainer.ps1"
 . "$PSScriptRoot\src\CodeAnalyzer\Infrastructure\Logging\ConsoleLogger.ps1"
 . "$PSScriptRoot\src\CodeAnalyzer\Infrastructure\AI\BedrockAdapter.ps1"
+
+# === UseCase ===
 . "$PSScriptRoot\src\CodeAnalyzer\Core\UseCases\AnalyzeDiffUseCase.ps1"
+. "$PSScriptRoot\src\CodeAnalyzer\Core\UseCases\ArchitectureAuditUseCase.ps1"
+. "$PSScriptRoot\src\CodeAnalyzer\Core\UseCases\AskQuestionUseCase.ps1"
 
 . "$PSScriptRoot\src\CodeAnalyzer\Private\Get-GitChanges.ps1"
 . "$PSScriptRoot\src\CodeAnalyzer\Private\Get-ProjectContext.ps1"
@@ -94,14 +103,35 @@ try {
 
             $useCase.Execute($gitChanges, $projectContext)
         }
-        "architecture" { "Архитектурный аудит — в разработке" }
-        "ask" { "Свободный запрос — в разработке" }
-        default { throw "Неизвестный режим" }
+        "architecture" {
+            $useCase = [ArchitectureAuditUseCase]::new(
+                $container.Resolve("IAIProvider"),
+                $logger,
+                $config,
+                $ProjectPath,
+                $Architecture,
+                $MaxInputChars
+            )
+            $useCase.Execute()
+        }
+        "ask" {
+            if (-not $Query) { throw "Укажите -Query для режима ask" }
+            $useCase = [AskQuestionUseCase]::new($container.Resolve("IAIProvider"), $logger)
+            $useCase.Execute($Query)
+        }
+        default { throw "Неизвестный режим: $Mode" }
     }
 
     $changedFiles = if ($Mode -eq 'diff' -and $gitChanges) { $gitChanges.ChangedFiles } else { @() }
 
-    $outputFile = Join-Path $OutputPath "diff_$(Get-Date -Format 'yyyyMMdd_HHmmss').md"
+    $prefix = switch ($Mode) {
+        diff {"diff"}
+        architecture {"architecture-audit"}
+        ask {"ask-answer"}
+        default {"unknown"}
+    }
+
+    $outputFile = Join-Path $OutputPath "$prefix_$(Get-Date -Format 'yyyyMMdd_HHmmss').md"
     Save-AnalysisResults `
         -AnalysisResult $result `
         -OutputPath $OutputPath `
