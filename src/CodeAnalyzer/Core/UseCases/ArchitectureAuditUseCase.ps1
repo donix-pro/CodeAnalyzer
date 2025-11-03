@@ -5,6 +5,7 @@ class ArchitectureAuditUseCase {
     [string]$ProjectPath
     [string]$TargetArchitecture
     [int]$MaxInputChars
+    [string]$TemplatePath = "$PSScriptRoot\..\..\Application\PromptTemplates\ArchitectureAuditPrompt.txt"
 
     ArchitectureAuditUseCase([IAIProvider]$ai, [ILogger]$log, [hashtable]$cfg, [string]$path = ".", [string]$arch = "Auto", [int]$max = 100000) {
         $this.AI = $ai
@@ -18,6 +19,10 @@ class ArchitectureAuditUseCase {
     [string] Execute() {
         $this.Logger.Info("АРХИТЕКТУРНЫЙ АУДИТ: $($this.ProjectPath) | Цель: $($this.TargetArchitecture)")
 
+        if (-not (Test-Path $this.TemplatePath)) {
+            throw "Шаблон не найден: $($this.TemplatePath)"
+        }
+
         # === Исключения ===
         $excluded = @('bin','obj','.git','.vs','node_modules')
         if ($this.Config.excludedDirectories) {
@@ -28,7 +33,7 @@ class ArchitectureAuditUseCase {
 
         # === Сбор файлов ===
         $files = Get-ChildItem -Path $this.ProjectPath -Recurse -File -Include *.cs, *.ps1, *.psm1 -ErrorAction Stop |
-                 Where-Object { -not $rx.IsMatch($_.FullName) }
+        Where-Object { -not $rx.IsMatch($_.FullName) }
 
         if ($files.Count -eq 0) {
             return "Нет файлов для анализа"
@@ -62,27 +67,14 @@ class ArchitectureAuditUseCase {
             $customRules = Get-Content $rulesPath -Raw
         }
 
-        # === ПРОМПТ ДЛЯ AI ===
-        $prompt = @"
-АНАЛИЗ АРХИТЕКТУРЫ ПРОЕКТА
-КОД ($($files.Count) файлов):
-$projectCode
-ЦЕЛЕВАЯ АРХИТЕКТУРА:
-$archPrompt
-КАСТОМНЫЕ ПРАВИЛА:
-$customRules
-ЗАДАЧА:
-1. Проанализируй текущую архитектуру
-2. Сравни с целевой
-3. Найди нарушения
-4. Дай план рефакторинга
-5. Оцени сложность
-ФОРМАТ:
-📊 ТЕКУЩЕЕ СОСТОЯНИЕ: ...
-🎯 РЕКОМЕНДОВАННАЯ АРХИТЕКТУРА: ...
-🔧 ПЛАН РЕФАКТОРИНГА: ...
-⚡ ОЦЕНКА СЛОЖНОСТИ: ...
-"@
+        $template = Get-Content $this.TemplatePath -Raw
+
+        # === ПОДСТАНОВКА ===
+        $prompt = $template `
+        -replace '\{FileCount\}', $files.Count `
+        -replace '\{ProjectCode\}', $projectCode `
+        -replace '\{TargetArchitecture\}', $archPrompt `
+        -replace '\{CustomRules\}', $customRules
 
         try {
             $response = $this.AI.Analyze($prompt)

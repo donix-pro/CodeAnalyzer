@@ -1,3 +1,5 @@
+. "$PSScriptRoot\..\..\Core\Interfaces\IAIProvider.ps1"
+
 class BedrockAdapter : IAIProvider {
     [hashtable]$Config
 
@@ -8,6 +10,10 @@ class BedrockAdapter : IAIProvider {
             }
         }
         $this.Config = $cfg
+    }
+
+    [string] Analyze([string]$prompt) {
+        return $this.Analyze($prompt, 2000)
     }
 
     [string] Analyze([string]$prompt, [int]$maxTokens = 2000) {

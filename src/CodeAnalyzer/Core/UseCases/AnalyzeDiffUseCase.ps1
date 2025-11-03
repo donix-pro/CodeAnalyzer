@@ -14,7 +14,7 @@ class AnalyzeDiffUseCase {
             $this.Logger.Warn("Diff усечён")
         }
 
-        if (-not $ProjectContext is [hashtable]){
+        if (-not $ProjectContext -is [hashtable]){
             throw "ProjectContext должен быть hashtable"
         }
 
