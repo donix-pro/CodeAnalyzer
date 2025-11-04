@@ -2,6 +2,7 @@
 
 class BedrockAdapter : IAIProvider {
     [hashtable]$Config
+    [int]$DefaultMaxTokens = 2000
 
     BedrockAdapter([hashtable]$cfg) {
         @('modelId', 'awsRegion') | ForEach-Object {
@@ -13,7 +14,7 @@ class BedrockAdapter : IAIProvider {
     }
 
     [string] Analyze([string]$prompt) {
-        return $this.Analyze($prompt, 2000)
+        return $this.Analyze($prompt, $this.DefaultMaxTokens)
     }
 
     [string] Analyze([string]$prompt, [int]$maxTokens = 2000) {

@@ -21,6 +21,10 @@ param(
     [switch]$WhatIf
 )
 
+if (-not (Get-Module AWS.Tools.BedrockRuntime -ListAvailable)) {
+    Install-Module AWS.Tools.BedrockRuntime -Force -Scope CurrentUser
+}
+
 # === ПРОВЕРКА ФАЙЛОВ ===
 $required = @(
     "$PSScriptRoot\src\CodeAnalyzer\Private\Get-GitChanges.ps1",
@@ -104,13 +108,17 @@ try {
             $useCase.Execute($gitChanges, $projectContext)
         }
         "architecture" {
+
+            $templatePath = Join-Path $PSScriptRoot "src\CodeAnalyzer\Application\PromptTemplates\ArchitectureAuditPrompt.txt"
+
             $useCase = [ArchitectureAuditUseCase]::new(
                 $container.Resolve("IAIProvider"),
                 $logger,
                 $config,
                 $ProjectPath,
                 $Architecture,
-                $MaxInputChars
+                $MaxInputChars,
+                $templatePath    
             )
             $useCase.Execute()
         }
