@@ -65,13 +65,13 @@ class GeminiAdapter : IAIProvider {
 
         }
         catch {
+            $errMsg = $_.Exception.Message
             if ($_.Exception.Response) {
-                $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-                $errorBody = $reader.ReadToEnd()
-                $reader.Close()
-                throw "Gemini API error: $($_.Exception.Message) — $errorBody"
+                $errorBody = $_.Exception.Response.Content.ReadAsStringAsync().Result
+                if (-not $errorBody) { $errorBody = $errMsg }
+                throw "Gemini API error: $errorBody"
             }
-            throw "Gemini API error: $($_.Exception.Message)"
+            throw "Gemini API error: $errMsg"
         }
     }
 }
