@@ -42,6 +42,7 @@ Import-Module AWS.Tools.BedrockRuntime -ErrorAction Stop
 . "$PSScriptRoot\src\CodeAnalyzer\Application\Services\DIContainer.ps1"
 . "$PSScriptRoot\src\CodeAnalyzer\Infrastructure\Logging\ConsoleLogger.ps1"
 . "$PSScriptRoot\src\CodeAnalyzer\Infrastructure\AI\BedrockAdapter.ps1"
+. "$PSScriptRoot\src\CodeAnalyzer\Infrastructure\AI\GeminiAdapter.ps1"
 
 # === UseCase ===
 . "$PSScriptRoot\src\CodeAnalyzer\Core\UseCases\AnalyzeDiffUseCase.ps1"
@@ -67,7 +68,24 @@ if ($PSVersionTable.PSVersion.Major -lt 6) {
 # === DI ===
 $container = [DIContainer]::new()
 $container.Register("ILogger", [ConsoleLogger]::new())
-$container.Register("IAIProvider", [BedrockAdapter]::new($config))
+
+$provider = "bedrock"
+if ($config.ContainsKey("provider")) {
+    $provider = $config["provider"]
+}
+
+switch ($provider) {
+    "gemini" {
+        $container.Register("IAIProvider", [GeminiAdapter]::new($config))
+        $logger = [ConsoleLogger]::new()
+        $logger.Info("AI Provider: Gemini ($($config.geminiModel))")
+    }
+    default {
+        $container.Register("IAIProvider", [BedrockAdapter]::new($config))
+        $logger = [ConsoleLogger]::new()
+        $logger.Info("AI Provider: AWS Bedrock ($($config.modelId))")
+    }
+}
 
 $useCase = [AnalyzeDiffUseCase]::new(
     $container.Resolve("IAIProvider"),
