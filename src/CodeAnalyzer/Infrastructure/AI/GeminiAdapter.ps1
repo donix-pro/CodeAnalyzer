@@ -3,7 +3,7 @@
 class GeminiAdapter : IAIProvider {
     [string]$ApiKey
     [string]$Model
-    [int]$DefaultMaxTokens = 2000
+    [int]$DefaultMaxTokens = 8192
 
     GeminiAdapter([hashtable]$cfg) {
         @('geminiApiKey', 'geminiModel') | ForEach-Object {
@@ -19,7 +19,7 @@ class GeminiAdapter : IAIProvider {
         return $this.Analyze($prompt, $this.DefaultMaxTokens)
     }
 
-    [string] Analyze([string]$prompt, [int]$maxTokens = 2000) {
+    [string] Analyze([string]$prompt, [int]$maxTokens = 8192) {
         $uri = "https://generativelanguage.googleapis.com/v1beta/models/$($this.Model):generateContent?key=$($this.ApiKey)"
 
         $body = @{
